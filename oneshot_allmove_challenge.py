@@ -35,6 +35,9 @@ class PokemonChallengeGUI:
         # 데이터 로드
         self.load_moves_data()
 
+        # 사용 가능한 기술 콤보박스 초기화
+        self.update_available_moves_combo()
+
     def load_settings(self):
         """설정 파일 로드"""
         self.config = configparser.ConfigParser()
@@ -121,9 +124,6 @@ class PokemonChallengeGUI:
         category_combo.pack(side=tk.LEFT, padx=(5, 20))
         category_combo.bind('<<ComboboxSelected>>', self.on_filter_change)
 
-        # 사용 버튼 (우측 상단)
-        self.use_button = ttk.Button(search_frame, text="기술 사용", command=self.on_use_button_click, width=10)
-        self.use_button.pack(side=tk.RIGHT)
 
     def setup_moves_treeview(self):
         """기술 리스트 Treeview 설정"""
@@ -172,31 +172,47 @@ class PokemonChallengeGUI:
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # 트리뷰 선택 이벤트
+        self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+
         # 히스토리 섹션
         self.setup_history_panel(right_frame)
 
     def setup_history_panel(self, parent):
         """최근 기록 패널 설정"""
-        # 히스토리 제목
-        ttk.Label(parent, text="최근 기록", font=("맑은 고딕", 10, "bold")).pack(pady=(0, 5))
+        # 기술 선택 섹션
+        selection_frame = ttk.LabelFrame(parent, text="기술 선택", padding=10)
+        selection_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # 기술 선택 콤보박스 (검색 가능)
+        ttk.Label(selection_frame, text="기술:").pack(anchor=tk.W)
+        self.move_selection_var = tk.StringVar()
+        self.move_combo = ttk.Combobox(selection_frame, textvariable=self.move_selection_var,
+                                      width=20, font=("맑은 고딕", 9))
+        self.move_combo.pack(fill=tk.X, pady=(2, 5))
+        self.move_combo.bind('<<ComboboxSelected>>', self.on_move_combo_select)
+        self.move_combo.bind('<KeyRelease>', self.on_move_combo_search)
+
+        # 기술 사용 버튼
+        self.use_button = ttk.Button(selection_frame, text="기술 사용",
+                                    command=self.on_use_button_click, width=15)
+        self.use_button.pack(pady=(0, 5))
+
+        # 히스토리 섹션
+        history_label_frame = ttk.LabelFrame(parent, text="최근 기록", padding=5)
+        history_label_frame.pack(fill=tk.BOTH, expand=True)
 
         # 히스토리 리스트박스
-        history_frame = ttk.Frame(parent)
+        history_frame = ttk.Frame(history_label_frame)
         history_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.history_listbox = tk.Listbox(history_frame, width=25, height=15, font=("맑은 고딕", 9))
+        self.history_listbox = tk.Listbox(history_frame, width=25, height=12, font=("맑은 고딕", 9))
         self.history_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 히스토리 스크롤바
         history_scroll = ttk.Scrollbar(history_frame, orient=tk.VERTICAL, command=self.history_listbox.yview)
         self.history_listbox.configure(yscrollcommand=history_scroll.set)
         history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 히스토리 버튼들
-        button_frame = ttk.Frame(parent)
-        button_frame.pack(fill=tk.X, pady=(5, 0))
-
-        ttk.Button(button_frame, text="히스토리 지우기", command=self.clear_history, width=15).pack(pady=2)
 
     def setup_stats_panel(self):
         """통계 패널 설정"""
@@ -355,19 +371,21 @@ class PokemonChallengeGUI:
 
     def on_use_button_click(self):
         """사용 버튼 클릭 시 호출"""
-        selection = self.tree.selection()
-        if not selection:
+        selected_text = self.move_selection_var.get().strip()
+        if not selected_text:
             messagebox.showwarning("선택 오류", "사용할 기술을 선택해주세요.")
             return
 
-        item = selection[0]
-        values = self.tree.item(item, "values")
-        move_id = int(values[0])
-        move_name = values[1]
+        # "ID. 기술명" 형식에서 ID 추출
+        try:
+            move_id = int(selected_text.split('.')[0])
+        except (ValueError, IndexError):
+            messagebox.showwarning("선택 오류", "올바른 기술을 선택해주세요.")
+            return
 
         # 이미 사용된 기술인지 확인
         if self.used_moves[move_id - 1]:
-            messagebox.showwarning("경고", f"{move_name}은(는) 이미 사용된 기술입니다.")
+            messagebox.showwarning("경고", "이미 사용된 기술입니다.")
             return
 
         # 바로 사용 (확인창 없음)
@@ -391,6 +409,8 @@ class PokemonChallengeGUI:
         # UI 업데이트
         self.refresh_treeview()
         self.update_stats()
+        self.update_available_moves_combo()  # 콤보박스 업데이트
+        self.move_selection_var.set("")  # 선택 초기화
 
         # 자동 저장
         if self.current_save_file:
@@ -439,11 +459,62 @@ class PokemonChallengeGUI:
         self.move_history.append(record)
         self.update_history_display()
 
-    def clear_history(self):
-        """히스토리 지우기"""
-        if messagebox.askyesno("히스토리 지우기", "히스토리를 모두 지우시겠습니까?"):
-            self.move_history.clear()
-            self.update_history_display()
+    def update_available_moves_combo(self):
+        """사용 가능한 기술들로 콤보박스 업데이트"""
+        if self.moves_df is None:
+            return
+
+        # 사용 가능한 기술들만 필터링
+        available_moves = []
+        for _, row in self.moves_df.iterrows():
+            move_id = int(row['id'])
+            if not self.used_moves[move_id - 1]:  # 사용되지 않은 기술만
+                move_text = f"{row['id']}. {row['name']}"
+                available_moves.append(move_text)
+
+        self.move_combo['values'] = available_moves
+
+    def on_tree_select(self, event):
+        """트리뷰에서 기술 선택 시 콤보박스에 반영"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        values = self.tree.item(item, "values")
+        move_id = int(values[0])
+        move_name = values[1]
+
+        # 사용 가능한 기술인지 확인
+        if not self.used_moves[move_id - 1]:
+            move_text = f"{move_id}. {move_name}"
+            self.move_selection_var.set(move_text)
+
+    def on_move_combo_select(self, event):
+        """콤보박스에서 기술 선택 시"""
+        pass  # 선택만 하면 됨
+
+    def on_move_combo_search(self, event):
+        """콤보박스에서 검색 입력 시"""
+        if self.moves_df is None:
+            return
+
+        search_text = self.move_selection_var.get().lower()
+        if not search_text:
+            self.update_available_moves_combo()
+            return
+
+        # 검색어로 필터링
+        filtered_moves = []
+        for _, row in self.moves_df.iterrows():
+            move_id = int(row['id'])
+            if not self.used_moves[move_id - 1]:  # 사용되지 않은 기술만
+                move_name = row['name'].lower()
+                if search_text in move_name or search_text in str(move_id):
+                    move_text = f"{row['id']}. {row['name']}"
+                    filtered_moves.append(move_text)
+
+        self.move_combo['values'] = filtered_moves
 
     def new_challenge(self):
         """새 챌린지 시작"""
@@ -454,6 +525,8 @@ class PokemonChallengeGUI:
             self.refresh_treeview()
             self.update_stats()
             self.update_history_display()
+            self.update_available_moves_combo()
+            self.move_selection_var.set("")
             self.save_file_var.set("세이브 파일: 없음")
 
     def load_challenge(self):
@@ -477,6 +550,8 @@ class PokemonChallengeGUI:
                 self.refresh_treeview()
                 self.update_stats()
                 self.update_history_display()
+                self.update_available_moves_combo()
+                self.move_selection_var.set("")
                 self.save_file_var.set(f"세이브 파일: {os.path.basename(file_path)}")
 
                 messagebox.showinfo("성공", "챌린지를 성공적으로 로드했습니다.")
@@ -537,6 +612,8 @@ class PokemonChallengeGUI:
             self.refresh_treeview()
             self.update_stats()
             self.update_history_display()
+            self.update_available_moves_combo()
+            self.move_selection_var.set("")
 
 
 def main():
