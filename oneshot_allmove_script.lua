@@ -4,6 +4,7 @@
 -- 설정
 local POLLING_INTERVAL = 60  -- 폴링 간격 (프레임)
 local COMMAND_FILE = "lua_interface/command.txt"
+local DISABLE_TOUCH = false  -- true로 설정하면 터치 입력을 비활성화
 
 -- 포켓몬 플래티넘 메모리 주소
 local FIRST_MOVE_SLOT = 0x2C6AEC  -- 첫 번째 기술 슬롯 직접 주소
@@ -55,12 +56,11 @@ function touchScreen(x, y, frames)
         emu.frameadvance()
     end
 
-    -- 터치 해제
-    local to_set = {}
-    local to_set_axes = {}
-    joypad.set(to_set)
-    joypad.setanalog(to_set_axes)
-    emu.frameadvance()
+    -- 터치 완전 해제
+    client.clearautohold()
+    for i = 1, 10 do
+        emu.frameadvance()
+    end
 end
 
 -- 기술 변경
@@ -78,23 +78,28 @@ function changeMove(moveIdStr)
     memory.write_u16_le(moveSlotAddr, moveId, "Main RAM")
     print(string.format("기술 변경: %d (0x%04X)", moveId, moveId))
 
-    -- 0.5초 대기 후 좌측상단 두번 클릭 (30프레임 = 0.5초)
-    for i = 1, 30 do
-        emu.frameadvance()
+    -- 터치 입력이 비활성화되지 않은 경우에만 실행
+    if not DISABLE_TOUCH then
+        -- 0.5초 대기 후 좌측상단 두번 클릭 (30프레임 = 0.5초)
+        for i = 1, 30 do
+            emu.frameadvance()
+        end
+
+        -- 첫 번째 클릭 (좌측상단: 50, 50)
+        touchScreen(50, 50, 5)
+
+        -- 0.5초 대기
+        for i = 1, 30 do
+            emu.frameadvance()
+        end
+
+        -- 두 번째 클릭
+        touchScreen(50, 50, 5)
+
+        print("터치 입력 완료")
+    else
+        print("터치 입력 비활성화됨")
     end
-
-    -- 첫 번째 클릭 (좌측상단: 50, 50)
-    touchScreen(50, 50, 5)
-
-    -- 0.5초 대기
-    for i = 1, 30 do
-        emu.frameadvance()
-    end
-
-    -- 두 번째 클릭
-    touchScreen(50, 50, 5)
-
-    print("터치 입력 완료")
     return true
 end
 

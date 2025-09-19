@@ -12,7 +12,6 @@ class PokemonChallengeGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("포켓몬 4세대 - 원샷 올무브 챌린지")
-        self.root.geometry("800x600")
 
         # 데이터 초기화
         self.moves_df = None
@@ -25,6 +24,14 @@ class PokemonChallengeGUI:
 
         # 설정 로드
         self.load_settings()
+
+        # 창 크기 설정 적용
+        width = self.config.get('General', 'window_width', fallback='800')
+        height = self.config.get('General', 'window_height', fallback='600')
+        self.root.geometry(f"{width}x{height}")
+
+        # 창 닫을 때 설정 저장
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # 통신 파일 경로
         self.command_file = "lua_interface/command.txt"
@@ -179,31 +186,30 @@ class PokemonChallengeGUI:
         self.setup_history_panel(right_frame)
 
     def setup_history_panel(self, parent):
-        """최근 기록 패널 설정"""
-        # 기술 선택 섹션
-        selection_frame = ttk.LabelFrame(parent, text="기술 선택", padding=10)
-        selection_frame.pack(fill=tk.X, pady=(0, 10))
+        """기술 선택 패널 설정"""
+        # 하나의 프레임으로 통합
+        main_panel = ttk.LabelFrame(parent, text="기술 선택", padding=10)
+        main_panel.pack(fill=tk.BOTH, expand=True)
 
         # 기술 선택 콤보박스 (검색 가능)
-        ttk.Label(selection_frame, text="기술:").pack(anchor=tk.W)
+        ttk.Label(main_panel, text="기술:").pack(anchor=tk.W)
         self.move_selection_var = tk.StringVar()
-        self.move_combo = ttk.Combobox(selection_frame, textvariable=self.move_selection_var,
+        self.move_combo = ttk.Combobox(main_panel, textvariable=self.move_selection_var,
                                       width=20, font=("맑은 고딕", 9))
         self.move_combo.pack(fill=tk.X, pady=(2, 5))
         self.move_combo.bind('<<ComboboxSelected>>', self.on_move_combo_select)
         self.move_combo.bind('<KeyRelease>', self.on_move_combo_search)
 
         # 기술 사용 버튼
-        self.use_button = ttk.Button(selection_frame, text="기술 사용",
+        self.use_button = ttk.Button(main_panel, text="기술 사용",
                                     command=self.on_use_button_click, width=15)
-        self.use_button.pack(pady=(0, 5))
+        self.use_button.pack(pady=(0, 10))
 
-        # 히스토리 섹션
-        history_label_frame = ttk.LabelFrame(parent, text="최근 기록", padding=5)
-        history_label_frame.pack(fill=tk.BOTH, expand=True)
+        # 히스토리 섹션 (같은 프레임 안에)
+        ttk.Label(main_panel, text="최근 기록:").pack(anchor=tk.W, pady=(5, 2))
 
         # 히스토리 리스트박스
-        history_frame = ttk.Frame(history_label_frame)
+        history_frame = ttk.Frame(main_panel)
         history_frame.pack(fill=tk.BOTH, expand=True)
 
         self.history_listbox = tk.Listbox(history_frame, width=25, height=12, font=("맑은 고딕", 9))
@@ -609,6 +615,26 @@ class PokemonChallengeGUI:
             self.update_history_display()
             self.update_available_moves_combo()
             self.move_selection_var.set("")
+
+    def on_closing(self):
+        """창 닫을 때 호출 - 현재 창 크기를 설정에 저장"""
+        # 현재 창 크기 가져오기
+        geometry = self.root.geometry()
+        width, height = geometry.split('x')[0], geometry.split('x')[1].split('+')[0]
+
+        # 설정에 저장
+        self.config.set('General', 'window_width', width)
+        self.config.set('General', 'window_height', height)
+
+        # 설정 파일에 저장
+        try:
+            with open("settings.ini", 'w', encoding='utf-8') as f:
+                self.config.write(f)
+        except Exception as e:
+            print(f"설정 저장 오류: {e}")
+
+        # 창 닫기
+        self.root.destroy()
 
 
 def main():
