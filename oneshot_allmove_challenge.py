@@ -402,9 +402,8 @@ class PokemonChallengeGUI:
         # 히스토리에 추가
         self.add_to_history(move_id, move_name)
 
-        # 루아 스크립트에 헥스코드로 명령 전송
-        hex_code = f"{move_id:04X}"  # 4자리 헥스코드로 변환
-        self.send_command_to_lua(hex_code)
+        # 루아 스크립트에 기술 ID 전송
+        self.send_command_to_lua(str(move_id))
 
         # UI 업데이트
         self.refresh_treeview()
@@ -412,13 +411,13 @@ class PokemonChallengeGUI:
         self.update_available_moves_combo()  # 콤보박스 업데이트
         self.move_selection_var.set("")  # 선택 초기화
 
-    def send_command_to_lua(self, hex_code):
-        """루아 스크립트에 헥스코드 전송"""
+    def send_command_to_lua(self, move_id):
+        """루아 스크립트에 기술 ID 전송"""
         try:
             os.makedirs("lua_interface", exist_ok=True)
             with open(self.command_file, 'w', encoding='utf-8') as f:
-                f.write(hex_code)
-            print(f"루아에 기술 헥스코드 전송: {hex_code}")
+                f.write(move_id)
+            print(f"루아에 기술 ID 전송: {move_id}")
         except Exception as e:
             print(f"명령 전송 오류: {e}")
 

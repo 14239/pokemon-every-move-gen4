@@ -58,39 +58,39 @@ function getFirstMoveSlotAddress()
 end
 
 -- 기술 변경
-function changeMove(hexCode)
+function changeMove(moveIdStr)
     local moveSlotAddr = getFirstMoveSlotAddress()
     if not moveSlotAddr then
         print("포켓몬 데이터 주소를 찾을 수 없습니다")
         return false
     end
 
-    -- 헥스코드를 숫자로 변환
-    local moveId = tonumber(hexCode, 16)
+    -- 문자열을 숫자로 변환
+    local moveId = tonumber(moveIdStr)
     if not moveId then
-        print("잘못된 헥스코드: " .. hexCode)
+        print("잘못된 기술 ID: " .. moveIdStr)
         return false
     end
 
     -- 기술 변경
     memory.write_u16_le(moveSlotAddr, moveId)
-    print(string.format("기술 변경: %s (hex) = %d (dec)", hexCode, moveId))
+    print(string.format("기술 변경: %d", moveId))
     return true
 end
 
 -- 명령 확인 및 처리
 function checkCommands()
     if fileExists(COMMAND_FILE) then
-        local hexCode = readFile(COMMAND_FILE)
-        if hexCode and hexCode:len() > 0 then
+        local moveId = readFile(COMMAND_FILE)
+        if moveId and moveId:len() > 0 then
             -- 개행문자 제거
-            hexCode = hexCode:gsub("[\r\n]", "")
+            moveId = moveId:gsub("[\r\n]", "")
 
             -- 기술 변경 실행
-            if changeMove(hexCode) then
-                print("기술 변경 완료: " .. hexCode)
+            if changeMove(moveId) then
+                print("기술 변경 완료: " .. moveId)
             else
-                print("기술 변경 실패: " .. hexCode)
+                print("기술 변경 실패: " .. moveId)
             end
 
             -- 명령 파일 삭제
