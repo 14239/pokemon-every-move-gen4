@@ -1,5 +1,5 @@
 -- 포켓몬 플래티넘 원샷 올무브 챌린지 루아 스크립트
--- DeSmuME용 - 간단 버전
+-- DeSmuME용 - 표준 형식
 
 -- 설정
 local POLLING_INTERVAL = 60  -- 폴링 간격 (프레임)
@@ -39,7 +39,7 @@ end
 -- 동적 메모리 주소 탐지
 function findPartyPokemonAddress()
     -- 포인터 체인을 따라 실제 포켓몬 데이터 주소 찾기
-    local basePointer = memory.readdword(PARTY_POKEMON_BASE)
+    local basePointer = memory.read_u32_le(PARTY_POKEMON_BASE)
     if basePointer and basePointer > 0x02000000 then
         return basePointer
     end
@@ -61,20 +61,20 @@ end
 function changeMove(hexCode)
     local moveSlotAddr = getFirstMoveSlotAddress()
     if not moveSlotAddr then
-        console.log("포켓몬 데이터 주소를 찾을 수 없습니다")
+        print("포켓몬 데이터 주소를 찾을 수 없습니다")
         return false
     end
 
     -- 헥스코드를 숫자로 변환
     local moveId = tonumber(hexCode, 16)
     if not moveId then
-        console.log("잘못된 헥스코드: " .. hexCode)
+        print("잘못된 헥스코드: " .. hexCode)
         return false
     end
 
     -- 기술 변경
-    memory.writeword(moveSlotAddr, moveId)
-    console.log(string.format("기술 변경: %s (hex) = %d (dec)", hexCode, moveId))
+    memory.write_u16_le(moveSlotAddr, moveId)
+    print(string.format("기술 변경: %s (hex) = %d (dec)", hexCode, moveId))
     return true
 end
 
@@ -88,9 +88,9 @@ function checkCommands()
 
             -- 기술 변경 실행
             if changeMove(hexCode) then
-                console.log("기술 변경 완료: " .. hexCode)
+                print("기술 변경 완료: " .. hexCode)
             else
-                console.log("기술 변경 실패: " .. hexCode)
+                print("기술 변경 실패: " .. hexCode)
             end
 
             -- 명령 파일 삭제
@@ -110,13 +110,13 @@ end
 
 -- 초기화
 function initialize()
-    console.log("포켓몬 플래티넘 원샷 올무브 챌린지 스크립트 시작")
-    console.log("첫 번째 포켓몬의 첫 번째 기술 슬롯을 변경합니다")
+    print("포켓몬 플래티넘 원샷 올무브 챌린지 스크립트 시작")
+    print("첫 번째 포켓몬의 첫 번째 기술 슬롯을 변경합니다")
 
     -- 디렉토리 생성
     os.execute("mkdir lua_interface 2>nul")
 
-    console.log("초기화 완료 - 명령 대기 중...")
+    print("초기화 완료 - 명령 대기 중...")
 end
 
 -- 메모리 워치 함수 (디버깅용)
@@ -128,7 +128,7 @@ function watchMemory()
         -- 첫 번째 포켓몬의 첫 번째 기술 표시
         local moveAddr = getFirstMoveSlotAddress()
         if moveAddr then
-            local currentMove = memory.readword(moveAddr)
+            local currentMove = memory.read_u16_le(moveAddr)
             gui.text(10, 30, string.format("Current Move: %d (0x%04X)", currentMove, currentMove))
             gui.text(10, 50, string.format("Move Slot Addr: 0x%08X", moveAddr))
         end
@@ -144,20 +144,12 @@ function watchMemory()
     end
 end
 
--- DeSmuME 이벤트 핸들러들
-function onFrameAdvance()
-    mainLoop()
-end
-
-function onGui()
-    watchMemory()
-end
-
 -- 스크립트 시작
 initialize()
 
--- DeSmuME 콜백 등록
-emu.registerbefore(onFrameAdvance)
-gui.register(onGui)
-
-console.log("루아 스크립트 로드 완료")
+-- DeSmuME 메인 루프
+while true do
+    mainLoop()
+    watchMemory()
+    emu.frameadvance()
+end

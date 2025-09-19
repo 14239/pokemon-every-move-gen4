@@ -219,13 +219,13 @@ class PokemonChallengeGUI:
         stats_frame = ttk.Frame(self.root)
         stats_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # 사용한 기술 수 표시
-        self.progress_var = tk.StringVar(value="사용한 기술: 0/469 (0.0%)")
-        ttk.Label(stats_frame, textvariable=self.progress_var).pack(side=tk.LEFT)
-
         # 현재 세이브 파일 표시
         self.save_file_var = tk.StringVar(value="세이브 파일: 없음")
-        ttk.Label(stats_frame, textvariable=self.save_file_var).pack(side=tk.RIGHT)
+        ttk.Label(stats_frame, textvariable=self.save_file_var).pack(side=tk.LEFT)
+
+        # 사용한 기술 수 표시
+        self.progress_var = tk.StringVar(value="사용한 기술: 0/469 (0.0%)")
+        ttk.Label(stats_frame, textvariable=self.progress_var).pack(side=tk.RIGHT)
 
     def load_moves_data(self):
         """포켓몬 기술 데이터 로드"""
@@ -411,10 +411,6 @@ class PokemonChallengeGUI:
         self.update_stats()
         self.update_available_moves_combo()  # 콤보박스 업데이트
         self.move_selection_var.set("")  # 선택 초기화
-
-        # 자동 저장
-        if self.current_save_file:
-            self.save_challenge()
 
     def send_command_to_lua(self, hex_code):
         """루아 스크립트에 헥스코드 전송"""
