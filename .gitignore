@@ -1,0 +1,36 @@
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Release
+release/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+
+# Communication files (auto-generated)
+lua_interface/command.txt
+lua_interface/response.txt

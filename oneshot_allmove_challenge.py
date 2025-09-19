@@ -17,6 +17,7 @@ class PokemonChallengeGUI:
         # 데이터 초기화
         self.moves_df = None
         self.used_moves = [False] * 469
+        self.move_history = []  # 사용한 기술 히스토리 [{"id": 1, "name": "몸통박치기", "timestamp": "2025-01-15 10:30:00"}, ...]
         self.current_save_file = None
         self.filtered_moves = None
         self.sort_column = None
@@ -126,13 +127,21 @@ class PokemonChallengeGUI:
 
     def setup_moves_treeview(self):
         """기술 리스트 Treeview 설정"""
-        # Treeview 프레임
-        tree_frame = ttk.Frame(self.root)
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # 메인 프레임 (가로로 나누기)
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # Treeview
+        # 왼쪽 프레임 (기술 리스트)
+        left_frame = ttk.Frame(main_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 오른쪽 프레임 (히스토리)
+        right_frame = ttk.Frame(main_frame)
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+
+        # Treeview (기술 리스트)
         columns = ("ID", "기술명", "타입", "카테고리", "위력", "명중률", "PP")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=15)
+        self.tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=15)
 
         # 컬럼 설정 (정렬 가능)
         self.tree.heading("ID", text="ID", command=lambda: self.sort_treeview("id"))
@@ -145,31 +154,57 @@ class PokemonChallengeGUI:
 
         # 컬럼 너비 설정
         self.tree.column("ID", width=50)
-        self.tree.column("기술명", width=150)
-        self.tree.column("타입", width=80)
-        self.tree.column("카테고리", width=80)
-        self.tree.column("위력", width=60)
-        self.tree.column("명중률", width=60)
-        self.tree.column("PP", width=50)
+        self.tree.column("기술명", width=120)
+        self.tree.column("타입", width=70)
+        self.tree.column("카테고리", width=70)
+        self.tree.column("위력", width=50)
+        self.tree.column("명중률", width=50)
+        self.tree.column("PP", width=40)
 
         # 회색 태그 설정 (사용된 기술용)
         self.tree.tag_configure("used", foreground="gray")
 
-        # 스크롤바
-        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        # 스크롤바 (기술 리스트)
+        scrollbar = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        # 패킹
+        # 패킹 (기술 리스트)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 히스토리 섹션
+        self.setup_history_panel(right_frame)
+
+    def setup_history_panel(self, parent):
+        """최근 기록 패널 설정"""
+        # 히스토리 제목
+        ttk.Label(parent, text="최근 기록", font=("맑은 고딕", 10, "bold")).pack(pady=(0, 5))
+
+        # 히스토리 리스트박스
+        history_frame = ttk.Frame(parent)
+        history_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.history_listbox = tk.Listbox(history_frame, width=25, height=15, font=("맑은 고딕", 9))
+        self.history_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 히스토리 스크롤바
+        history_scroll = ttk.Scrollbar(history_frame, orient=tk.VERTICAL, command=self.history_listbox.yview)
+        self.history_listbox.configure(yscrollcommand=history_scroll.set)
+        history_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 히스토리 버튼들
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
+
+        ttk.Button(button_frame, text="히스토리 지우기", command=self.clear_history, width=15).pack(pady=2)
 
     def setup_stats_panel(self):
         """통계 패널 설정"""
         stats_frame = ttk.Frame(self.root)
         stats_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        # 진행률 표시
-        self.progress_var = tk.StringVar(value="진행률: 0/469 (0.0%)")
+        # 사용한 기술 수 표시
+        self.progress_var = tk.StringVar(value="사용한 기술: 0/469 (0.0%)")
         ttk.Label(stats_frame, textvariable=self.progress_var).pack(side=tk.LEFT)
 
         # 현재 세이브 파일 표시
@@ -340,8 +375,14 @@ class PokemonChallengeGUI:
 
     def use_move(self, move_id):
         """기술 사용 처리"""
+        # 기술명 가져오기
+        move_name = self.moves_df[self.moves_df['id'] == str(move_id)]['name'].iloc[0]
+
         # 기술 사용 표시
         self.used_moves[move_id - 1] = True
+
+        # 히스토리에 추가
+        self.add_to_history(move_id, move_name)
 
         # 루아 스크립트에 헥스코드로 명령 전송
         hex_code = f"{move_id:04X}"  # 4자리 헥스코드로 변환
@@ -369,15 +410,50 @@ class PokemonChallengeGUI:
         """통계 정보 업데이트"""
         used_count = sum(self.used_moves)
         percentage = (used_count / 469) * 100
-        self.progress_var.set(f"진행률: {used_count}/469 ({percentage:.1f}%)")
+        self.progress_var.set(f"사용한 기술: {used_count}/469 ({percentage:.1f}%)")
+
+    def update_history_display(self):
+        """히스토리 리스트박스 업데이트"""
+        self.history_listbox.delete(0, tk.END)
+
+        # 최신 순으로 표시 (최근 것이 위에)
+        total_count = len(self.move_history)
+        recent_history = self.move_history[-50:] if len(self.move_history) > 50 else self.move_history
+
+        for i, record in enumerate(reversed(recent_history)):
+            # 전체 순서에서의 번호 계산 (최신이 위에 오도록)
+            order_num = total_count - i
+            display_text = f"{order_num}. {record['name']}"
+            self.history_listbox.insert(tk.END, display_text)
+
+    def add_to_history(self, move_id, move_name):
+        """히스토리에 기술 사용 기록 추가"""
+        from datetime import datetime
+
+        record = {
+            "id": move_id,
+            "name": move_name,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        self.move_history.append(record)
+        self.update_history_display()
+
+    def clear_history(self):
+        """히스토리 지우기"""
+        if messagebox.askyesno("히스토리 지우기", "히스토리를 모두 지우시겠습니까?"):
+            self.move_history.clear()
+            self.update_history_display()
 
     def new_challenge(self):
         """새 챌린지 시작"""
         if messagebox.askyesno("새 챌린지", "현재 진행 상황이 초기화됩니다. 계속하시겠습니까?"):
             self.used_moves = [False] * 469
+            self.move_history.clear()
             self.current_save_file = None
             self.refresh_treeview()
             self.update_stats()
+            self.update_history_display()
             self.save_file_var.set("세이브 파일: 없음")
 
     def load_challenge(self):
@@ -395,10 +471,12 @@ class PokemonChallengeGUI:
                     data = json.load(f)
 
                 self.used_moves = data.get('used_moves', [False] * 469)
+                self.move_history = data.get('move_history', [])
                 self.current_save_file = file_path
 
                 self.refresh_treeview()
                 self.update_stats()
+                self.update_history_display()
                 self.save_file_var.set(f"세이브 파일: {os.path.basename(file_path)}")
 
                 messagebox.showinfo("성공", "챌린지를 성공적으로 로드했습니다.")
@@ -434,6 +512,7 @@ class PokemonChallengeGUI:
                 "save_name": os.path.basename(file_path),
                 "created_date": datetime.now().isoformat(),
                 "used_moves": self.used_moves,
+                "move_history": self.move_history,
                 "metadata": {
                     "game_version": "Platinum",
                     "challenge_type": "Single Use",
@@ -454,8 +533,10 @@ class PokemonChallengeGUI:
         """모든 기술 초기화"""
         if messagebox.askyesno("초기화", "모든 기술을 사용 안함 상태로 초기화하시겠습니까?"):
             self.used_moves = [False] * 469
+            self.move_history.clear()
             self.refresh_treeview()
             self.update_stats()
+            self.update_history_display()
 
 
 def main():
