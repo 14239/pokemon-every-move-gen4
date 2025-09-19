@@ -1,13 +1,12 @@
 -- 포켓몬 플래티넘 원샷 올무브 챌린지 루아 스크립트
--- DeSmuME용 - 표준 형식
+-- BizHawk용 - 표준 형식
 
 -- 설정
 local POLLING_INTERVAL = 60  -- 폴링 간격 (프레임)
 local COMMAND_FILE = "lua_interface/command.txt"
 
 -- 포켓몬 플래티넘 메모리 주소
-local PARTY_POKEMON_BASE = 0x02101D2C  -- 포인터 체인 시작점
-local MOVE_DATA_OFFSET = 0x29C         -- 기술 데이터 오프셋
+local FIRST_MOVE_SLOT = 0x2C6AEC  -- 첫 번째 기술 슬롯 직접 주소
 
 -- 전역 변수
 local frameCounter = 0
@@ -36,34 +35,37 @@ function deleteFile(filename)
     os.remove(filename)
 end
 
--- 동적 메모리 주소 탐지
-function findPartyPokemonAddress()
-    -- 포인터 체인을 따라 실제 포켓몬 데이터 주소 찾기
-    local basePointer = memory.read_u32_le(PARTY_POKEMON_BASE)
-    if basePointer and basePointer > 0x02000000 then
-        return basePointer
-    end
-    return nil
+-- 첫 번째 기술 슬롯 주소 가져오기 (직접 주소 사용)
+function getFirstMoveSlotAddress()
+    return FIRST_MOVE_SLOT
 end
 
--- 현재 첫 번째 포켓몬의 첫 번째 기술 슬롯 주소 가져오기
-function getFirstMoveSlotAddress()
-    local partyBase = findPartyPokemonAddress()
-    if not partyBase then
-        return nil
+-- 터치 입력 함수
+function touchScreen(x, y, frames)
+    for i = 1, frames do
+        local to_set = {}
+        local to_set_axes = {}
+
+        to_set["Touch"] = true
+        to_set_axes["Touch X"] = x
+        to_set_axes["Touch Y"] = y
+
+        joypad.set(to_set)
+        joypad.setanalog(to_set_axes)
+        emu.frameadvance()
     end
 
-    -- 첫 번째 포켓몬의 첫 번째 기술 슬롯
-    return partyBase + MOVE_DATA_OFFSET
+    -- 터치 해제
+    local to_set = {}
+    local to_set_axes = {}
+    joypad.set(to_set)
+    joypad.setanalog(to_set_axes)
+    emu.frameadvance()
 end
 
 -- 기술 변경
 function changeMove(moveIdStr)
     local moveSlotAddr = getFirstMoveSlotAddress()
-    if not moveSlotAddr then
-        print("포켓몬 데이터 주소를 찾을 수 없습니다")
-        return false
-    end
 
     -- 문자열을 숫자로 변환
     local moveId = tonumber(moveIdStr)
@@ -72,9 +74,27 @@ function changeMove(moveIdStr)
         return false
     end
 
-    -- 기술 변경
-    memory.write_u16_le(moveSlotAddr, moveId)
-    print(string.format("기술 변경: %d", moveId))
+    -- 기술 변경 (2바이트 리틀엔디안)
+    memory.write_u16_le(moveSlotAddr, moveId, "Main RAM")
+    print(string.format("기술 변경: %d (0x%04X)", moveId, moveId))
+
+    -- 0.5초 대기 후 좌측상단 두번 클릭 (30프레임 = 0.5초)
+    for i = 1, 30 do
+        emu.frameadvance()
+    end
+
+    -- 첫 번째 클릭 (좌측상단: 50, 50)
+    touchScreen(50, 50, 5)
+
+    -- 0.5초 대기
+    for i = 1, 30 do
+        emu.frameadvance()
+    end
+
+    -- 두 번째 클릭
+    touchScreen(50, 50, 5)
+
+    print("터치 입력 완료")
     return true
 end
 
@@ -121,33 +141,24 @@ end
 
 -- 메모리 워치 함수 (디버깅용)
 function watchMemory()
-    local partyBase = findPartyPokemonAddress()
-    if partyBase then
-        gui.text(10, 10, string.format("Party Base: 0x%08X", partyBase))
+    local moveAddr = getFirstMoveSlotAddress()
+    local currentMove = memory.read_u16_le(moveAddr, "Main RAM")
 
-        -- 첫 번째 포켓몬의 첫 번째 기술 표시
-        local moveAddr = getFirstMoveSlotAddress()
-        if moveAddr then
-            local currentMove = memory.read_u16_le(moveAddr)
-            gui.text(10, 30, string.format("Current Move: %d (0x%04X)", currentMove, currentMove))
-            gui.text(10, 50, string.format("Move Slot Addr: 0x%08X", moveAddr))
-        end
-    else
-        gui.text(10, 10, "Party Base: Not Found")
-    end
+    gui.text(10, 10, string.format("Move Slot Addr: 0x%08X", moveAddr))
+    gui.text(10, 30, string.format("Current Move: %d (0x%04X)", currentMove, currentMove))
 
     -- 명령 대기 상태 표시
     if fileExists(COMMAND_FILE) then
-        gui.text(10, 70, "Status: Command Pending")
+        gui.text(10, 50, "Status: Command Pending")
     else
-        gui.text(10, 70, "Status: Waiting for Command")
+        gui.text(10, 50, "Status: Waiting for Command")
     end
 end
 
 -- 스크립트 시작
 initialize()
 
--- DeSmuME 메인 루프
+-- BizHawk 메인 루프
 while true do
     mainLoop()
     watchMemory()
