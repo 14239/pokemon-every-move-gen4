@@ -15,7 +15,7 @@ class PokemonChallengeGUI:
 
         # 데이터 초기화
         self.moves_df = None
-        self.used_moves = [False] * 469
+        self.used_moves = [False] * 467
         self.move_history = []  # 사용한 기술 히스토리 [{"id": 1, "name": "몸통박치기", "timestamp": "2025-01-15 10:30:00"}, ...]
         self.current_save_file = None
         self.filtered_moves = None
@@ -230,7 +230,7 @@ class PokemonChallengeGUI:
         ttk.Label(stats_frame, textvariable=self.save_file_var).pack(side=tk.LEFT)
 
         # 사용한 기술 수 표시
-        self.progress_var = tk.StringVar(value="사용한 기술: 0/469 (0.0%)")
+        self.progress_var = tk.StringVar(value="사용한 기술: 0/467 (0.0%)")
         ttk.Label(stats_frame, textvariable=self.progress_var).pack(side=tk.RIGHT)
 
     def load_moves_data(self):
@@ -430,8 +430,8 @@ class PokemonChallengeGUI:
     def update_stats(self):
         """통계 정보 업데이트"""
         used_count = sum(self.used_moves)
-        percentage = (used_count / 469) * 100
-        self.progress_var.set(f"사용한 기술: {used_count}/469 ({percentage:.1f}%)")
+        percentage = (used_count / 467) * 100
+        self.progress_var.set(f"사용한 기술: {used_count}/467 ({percentage:.1f}%)")
 
     def update_history_display(self):
         """히스토리 리스트박스 업데이트"""
@@ -520,7 +520,7 @@ class PokemonChallengeGUI:
     def new_challenge(self):
         """새 챌린지 시작"""
         if messagebox.askyesno("새 챌린지", "현재 진행 상황이 초기화됩니다. 계속하시겠습니까?"):
-            self.used_moves = [False] * 469
+            self.used_moves = [False] * 467
             self.move_history.clear()
             self.current_save_file = None
             self.refresh_treeview()
@@ -544,7 +544,7 @@ class PokemonChallengeGUI:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
 
-                self.used_moves = data.get('used_moves', [False] * 469)
+                self.used_moves = data.get('used_moves', [False] * 467)
                 self.move_history = data.get('move_history', [])
                 self.current_save_file = file_path
 
@@ -592,7 +592,7 @@ class PokemonChallengeGUI:
                 "metadata": {
                     "game_version": "Platinum",
                     "challenge_type": "Single Use",
-                    "total_moves": 469,
+                    "total_moves": 467,
                     "used_count": sum(self.used_moves)
                 }
             }
@@ -608,7 +608,7 @@ class PokemonChallengeGUI:
     def reset_all_moves(self):
         """모든 기술 초기화"""
         if messagebox.askyesno("초기화", "모든 기술을 사용 안함 상태로 초기화하시겠습니까?"):
-            self.used_moves = [False] * 469
+            self.used_moves = [False] * 467
             self.move_history.clear()
             self.refresh_treeview()
             self.update_stats()
