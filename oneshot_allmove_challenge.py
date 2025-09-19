@@ -11,7 +11,7 @@ import threading
 class PokemonChallengeGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("포켓몬 플래티넘 - 469개 기술 챌린지")
+        self.root.title("포켓몬 플래티넘 - 원샷 올무브 챌린지")
         self.root.geometry("800x600")
 
         # 데이터 초기화
@@ -19,6 +19,8 @@ class PokemonChallengeGUI:
         self.used_moves = [False] * 469
         self.current_save_file = None
         self.filtered_moves = None
+        self.sort_column = None
+        self.sort_reverse = False
 
         # 설정 로드
         self.load_settings()
@@ -132,14 +134,14 @@ class PokemonChallengeGUI:
         columns = ("ID", "기술명", "타입", "카테고리", "위력", "명중률", "PP")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=15)
 
-        # 컬럼 설정
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("기술명", text="기술명")
-        self.tree.heading("타입", text="타입")
-        self.tree.heading("카테고리", text="카테고리")
-        self.tree.heading("위력", text="위력")
-        self.tree.heading("명중률", text="명중률")
-        self.tree.heading("PP", text="PP")
+        # 컬럼 설정 (정렬 가능)
+        self.tree.heading("ID", text="ID", command=lambda: self.sort_treeview("id"))
+        self.tree.heading("기술명", text="기술명", command=lambda: self.sort_treeview("name"))
+        self.tree.heading("타입", text="타입", command=lambda: self.sort_treeview("type"))
+        self.tree.heading("카테고리", text="카테고리", command=lambda: self.sort_treeview("category"))
+        self.tree.heading("위력", text="위력", command=lambda: self.sort_treeview("power"))
+        self.tree.heading("명중률", text="명중률", command=lambda: self.sort_treeview("accuracy"))
+        self.tree.heading("PP", text="PP", command=lambda: self.sort_treeview("pp"))
 
         # 컬럼 너비 설정
         self.tree.column("ID", width=50)
@@ -236,6 +238,14 @@ class PokemonChallengeGUI:
         elif self.status_var.get() == "사용안됨":
             df = df[df['id'].apply(lambda x: not self.used_moves[x - 1])]
 
+        # 정렬 적용
+        if self.sort_column:
+            # 숫자 컬럼은 숫자로 변환해서 정렬
+            if self.sort_column in ['id', 'power', 'accuracy', 'pp']:
+                df[self.sort_column] = pd.to_numeric(df[self.sort_column], errors='coerce')
+
+            df = df.sort_values(by=self.sort_column, ascending=not self.sort_reverse)
+
         return df
 
     def on_search_change(self, *args):
@@ -244,6 +254,30 @@ class PokemonChallengeGUI:
 
     def on_filter_change(self, event):
         """필터 변경 시 호출"""
+        self.refresh_treeview()
+
+    def sort_treeview(self, column):
+        """Treeview 정렬"""
+        # 같은 컬럼을 다시 클릭하면 역순으로
+        if self.sort_column == column:
+            self.sort_reverse = not self.sort_reverse
+        else:
+            self.sort_column = column
+            self.sort_reverse = False
+
+        # 헤더에 정렬 방향 표시
+        for col in ["id", "name", "type", "category", "power", "accuracy", "pp"]:
+            heading_text = {
+                "id": "ID", "name": "기술명", "type": "타입", "category": "카테고리",
+                "power": "위력", "accuracy": "명중률", "pp": "PP"
+            }[col]
+
+            if col == column:
+                arrow = " ↓" if self.sort_reverse else " ↑"
+                self.tree.heading(heading_text, text=heading_text + arrow)
+            else:
+                self.tree.heading(heading_text, text=heading_text)
+
         self.refresh_treeview()
 
     def on_use_button_click(self):

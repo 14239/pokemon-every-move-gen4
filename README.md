@@ -1,4 +1,4 @@
-# 포켓몬 플래티넘 469개 기술 챌린지 도구
+# 포켓몬 플래티넘 원샷 올무브 챌린지 도구
 
 포켓몬 플래티넘에서 469개의 모든 기술을 각각 한 번씩만 사용할 수 있는 챌린지를 위한 도구입니다.
 
@@ -18,10 +18,10 @@
 ## 파일 구조
 
 ```
-pokemon_challenge_tool/
-├── pokemon_challenge.py          # Python GUI 프로그램
+oneshot_allmove_tool/
+├── oneshot_allmove_challenge.py  # Python GUI 프로그램
 ├── pokemon_moves.csv             # 469개 기술 마스터 데이터
-├── pokemon_challenge_script.lua  # DeSmuME 루아 스크립트
+├── oneshot_allmove_script.lua    # DeSmuME 루아 스크립트
 ├── settings.ini                  # 앱 설정
 ├── lua_interface/                # 루아 통신 폴더
 │   └── command.txt              # Python → 루아 헥스코드 전송
@@ -49,13 +49,13 @@ pip install pandas
 
 1. **Python GUI 프로그램 실행**
    ```bash
-   python pokemon_challenge.py
+   python oneshot_allmove_challenge.py
    ```
 
 2. **DeSmuME에서 루아 스크립트 로드**
    - DeSmuME 실행
    - Tools → Lua Scripting → New Lua Script Window
-   - `pokemon_challenge_script.lua` 파일 로드
+   - `oneshot_allmove_script.lua` 파일 로드
 
 3. **포켓몬 플래티넘 게임 시작**
    - ROM을 로드하고 게임 시작
