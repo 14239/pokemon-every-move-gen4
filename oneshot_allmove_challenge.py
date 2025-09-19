@@ -11,7 +11,7 @@ import threading
 class PokemonChallengeGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("포켓몬 플래티넘 - 원샷 올무브 챌린지")
+        self.root.title("포켓몬 4세대 - 원샷 올무브 챌린지")
         self.root.geometry("800x600")
 
         # 데이터 초기화
@@ -100,7 +100,7 @@ class PokemonChallengeGUI:
         type_combo = ttk.Combobox(search_frame, textvariable=self.type_var, width=10, state="readonly")
         type_combo['values'] = ("전체", "노말", "격투", "비행", "독", "땅", "바위", "벌레",
                                "고스트", "강철", "불꽃", "물", "풀", "전기", "에스퍼",
-                               "얼음", "드래곤", "어둠", "페어리")
+                               "얼음", "드래곤", "악")
         type_combo.pack(side=tk.LEFT, padx=(5, 10))
         type_combo.bind('<<ComboboxSelected>>', self.on_filter_change)
 
@@ -179,13 +179,51 @@ class PokemonChallengeGUI:
     def load_moves_data(self):
         """포켓몬 기술 데이터 로드"""
         try:
-            self.moves_df = pd.read_csv("pokemon_moves.csv")
+            # CSV 로드
+            self.moves_df = pd.read_csv("pokemon_moves.csv", dtype=str)
+
+            # 숫자 컬럼들을 적절히 처리 (특수문자는 원본 유지)
+            for col in ['power', 'pp']:
+                # 숫자로 변환 가능한 것만 변환, 나머지는 원본 유지
+                self.moves_df[col] = self.moves_df[col].apply(self.convert_to_numeric_if_possible)
+
+            # accuracy는 %를 제거하고 숫자만 추출
+            self.moves_df['accuracy_display'] = self.moves_df['accuracy']  # 원본 보관
+            self.moves_df['accuracy'] = self.moves_df['accuracy'].apply(self.extract_accuracy_number)
+
             self.refresh_treeview()
             self.update_stats()
         except FileNotFoundError:
             messagebox.showerror("오류", "pokemon_moves.csv 파일을 찾을 수 없습니다.")
         except Exception as e:
             messagebox.showerror("오류", f"데이터 로드 중 오류 발생: {str(e)}")
+
+    def convert_to_numeric_if_possible(self, value):
+        """가능하면 숫자로 변환, 불가능하면 원본 문자열 반환"""
+        try:
+            # 숫자만 있는 경우 int로 변환
+            if str(value).isdigit():
+                return int(value)
+            else:
+                return value  # "—", "∞" 등은 원본 유지
+        except:
+            return value
+
+    def extract_accuracy_number(self, value):
+        """명중률에서 숫자만 추출 (정렬용)"""
+        try:
+            if '%' in str(value):
+                # "100%", "85%" 등에서 숫자만 추출
+                num_str = str(value).replace('%', '')
+                if num_str.isdigit():
+                    return int(num_str)
+            elif str(value) == '∞':
+                return 999  # 무한대는 가장 큰 값으로
+            elif str(value) == '—':
+                return -1   # 없음은 가장 작은 값으로
+            return value
+        except:
+            return value
 
     def refresh_treeview(self):
         """Treeview 새로고침"""
@@ -205,7 +243,7 @@ class PokemonChallengeGUI:
 
             item = self.tree.insert("", tk.END, values=(
                 row['id'], row['name'], row['type'], row['category'],
-                row['power'], row['accuracy'], row['pp']
+                row['power'], row['accuracy_display'], row['pp']
             ))
 
             # 사용된 기술은 회색으로 표시
@@ -234,13 +272,13 @@ class PokemonChallengeGUI:
 
         # 상태 필터
         if self.status_var.get() == "사용됨":
-            df = df[df['id'].apply(lambda x: self.used_moves[x - 1])]
+            df = df[df['id'].apply(lambda x: self.used_moves[int(x) - 1])]
         elif self.status_var.get() == "사용안됨":
-            df = df[df['id'].apply(lambda x: not self.used_moves[x - 1])]
+            df = df[df['id'].apply(lambda x: not self.used_moves[int(x) - 1])]
 
         # 정렬 적용
         if self.sort_column:
-            # 숫자 컬럼은 숫자로 변환해서 정렬
+            # 숫자 컬럼들은 이미 적절히 변환되어 있음
             if self.sort_column in ['id', 'power', 'accuracy', 'pp']:
                 df[self.sort_column] = pd.to_numeric(df[self.sort_column], errors='coerce')
 
