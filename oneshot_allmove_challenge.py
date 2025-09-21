@@ -200,10 +200,17 @@ class PokemonChallengeGUI:
         self.move_combo.bind('<<ComboboxSelected>>', self.on_move_combo_select)
         self.move_combo.bind('<KeyRelease>', self.on_move_combo_search)
 
-        # 기술 사용 버튼
-        self.use_button = ttk.Button(main_panel, text="기술 사용",
-                                    command=self.on_use_button_click, width=15)
-        self.use_button.pack(pady=(0, 10))
+        # 기술 사용 버튼들 (1P, 2P)
+        button_frame = ttk.Frame(main_panel)
+        button_frame.pack(pady=(0, 10))
+
+        self.use_button_1p = ttk.Button(button_frame, text="1P 기술 사용",
+                                       command=lambda: self.on_use_button_click(1), width=12)
+        self.use_button_1p.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.use_button_2p = ttk.Button(button_frame, text="2P 기술 사용",
+                                       command=lambda: self.on_use_button_click(2), width=12)
+        self.use_button_2p.pack(side=tk.LEFT)
 
         # 히스토리 섹션 (같은 프레임 안에)
         ttk.Label(main_panel, text="최근 기록:").pack(anchor=tk.W, pady=(5, 2))
@@ -375,7 +382,7 @@ class PokemonChallengeGUI:
 
         self.refresh_treeview()
 
-    def on_use_button_click(self):
+    def on_use_button_click(self, player=1):
         """사용 버튼 클릭 시 호출"""
         selected_text = self.move_selection_var.get().strip()
         if not selected_text:
@@ -395,9 +402,9 @@ class PokemonChallengeGUI:
             return
 
         # 바로 사용 (확인창 없음)
-        self.use_move(move_id)
+        self.use_move(move_id, player)
 
-    def use_move(self, move_id):
+    def use_move(self, move_id, player=1):
         """기술 사용 처리"""
         # 기술명 가져오기
         move_name = self.moves_df[self.moves_df['id'] == str(move_id)]['name'].iloc[0]
@@ -406,10 +413,10 @@ class PokemonChallengeGUI:
         self.used_moves[move_id - 1] = True
 
         # 히스토리에 추가
-        self.add_to_history(move_id, move_name)
+        self.add_to_history(move_id, move_name, player)
 
-        # 루아 스크립트에 기술 ID 전송
-        self.send_command_to_lua(str(move_id))
+        # 루아 스크립트에 기술 ID와 플레이어 정보 전송
+        self.send_command_to_lua(str(move_id), player)
 
         # UI 업데이트
         self.refresh_treeview()
@@ -417,13 +424,13 @@ class PokemonChallengeGUI:
         self.update_available_moves_combo()  # 콤보박스 업데이트
         self.move_selection_var.set("")  # 선택 초기화
 
-    def send_command_to_lua(self, move_id):
-        """루아 스크립트에 기술 ID 전송"""
+    def send_command_to_lua(self, move_id, player=1):
+        """루아 스크립트에 기술 ID와 플레이어 정보 전송"""
         try:
             os.makedirs("lua_interface", exist_ok=True)
             with open(self.command_file, 'w', encoding='utf-8') as f:
-                f.write(move_id)
-            print(f"루아에 기술 ID 전송: {move_id}")
+                f.write(f"{player}P:{move_id}")
+            print(f"루아에 기술 ID 전송: {player}P:{move_id}")
         except Exception as e:
             print(f"명령 전송 오류: {e}")
 
@@ -437,17 +444,16 @@ class PokemonChallengeGUI:
         """히스토리 리스트박스 업데이트"""
         self.history_listbox.delete(0, tk.END)
 
-        # 최신 순으로 표시 (최근 것이 위에)
+        # 최신 순으로 표시 (최근 것이 위에) - 모든 기록 표시
         total_count = len(self.move_history)
-        recent_history = self.move_history[-50:] if len(self.move_history) > 50 else self.move_history
 
-        for i, record in enumerate(reversed(recent_history)):
+        for i, record in enumerate(reversed(self.move_history)):
             # 전체 순서에서의 번호 계산 (최신이 위에 오도록)
             order_num = total_count - i
             display_text = f"{order_num}. {record['name']}"
             self.history_listbox.insert(tk.END, display_text)
 
-    def add_to_history(self, move_id, move_name):
+    def add_to_history(self, move_id, move_name, player=1):
         """히스토리에 기술 사용 기록 추가"""
         from datetime import datetime
 

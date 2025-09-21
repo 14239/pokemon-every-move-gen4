@@ -7,7 +7,8 @@ local COMMAND_FILE = "lua_interface/command.txt"
 local DISABLE_TOUCH = false  -- true로 설정하면 터치 입력을 비활성화
 
 -- 포켓몬 플래티넘 메모리 주소
-local FIRST_MOVE_SLOT = 0x2C6AEC  -- 첫 번째 기술 슬롯 직접 주소
+local FIRST_MOVE_SLOT_1P = 0x2C6AEC  -- 1P 첫 번째 기술 슬롯 직접 주소
+local FIRST_MOVE_SLOT_2P = 0x2C6C6C  -- 2P 첫 번째 기술 슬롯 직접 주소
 
 -- 전역 변수
 local frameCounter = 0
@@ -36,9 +37,13 @@ function deleteFile(filename)
     os.remove(filename)
 end
 
--- 첫 번째 기술 슬롯 주소 가져오기 (직접 주소 사용)
-function getFirstMoveSlotAddress()
-    return FIRST_MOVE_SLOT
+-- 첫 번째 기술 슬롯 주소 가져오기 (플레이어별)
+function getFirstMoveSlotAddress(player)
+    if player == 2 then
+        return FIRST_MOVE_SLOT_2P
+    else
+        return FIRST_MOVE_SLOT_1P
+    end
 end
 
 -- 터치 입력 함수
@@ -64,8 +69,8 @@ function touchScreen(x, y, frames)
 end
 
 -- 기술 변경
-function changeMove(moveIdStr)
-    local moveSlotAddr = getFirstMoveSlotAddress()
+function changeMove(player, moveIdStr)
+    local moveSlotAddr = getFirstMoveSlotAddress(player)
 
     -- 문자열을 숫자로 변환
     local moveId = tonumber(moveIdStr)
@@ -76,7 +81,7 @@ function changeMove(moveIdStr)
 
     -- 기술 변경 (2바이트 리틀엔디안)
     memory.write_u16_le(moveSlotAddr, moveId, "Main RAM")
-    print(string.format("기술 변경: %d (0x%04X)", moveId, moveId))
+    print(string.format("%dP 기술 변경: %d (0x%04X)", player, moveId, moveId))
 
     -- 터치 입력이 비활성화되지 않은 경우에만 실행
     if not DISABLE_TOUCH then
@@ -106,16 +111,24 @@ end
 -- 명령 확인 및 처리
 function checkCommands()
     if fileExists(COMMAND_FILE) then
-        local moveId = readFile(COMMAND_FILE)
-        if moveId and moveId:len() > 0 then
+        local command = readFile(COMMAND_FILE)
+        if command and command:len() > 0 then
             -- 개행문자 제거
-            moveId = moveId:gsub("[\r\n]", "")
+            command = command:gsub("[\r\n]", "")
 
-            -- 기술 변경 실행
-            if changeMove(moveId) then
-                print("기술 변경 완료: " .. moveId)
+            -- "1P:123" 또는 "2P:456" 형식으로 파싱
+            local player, moveId = command:match("(%d+)P:(%d+)")
+
+            if player and moveId then
+                player = tonumber(player)
+                -- 기술 변경 실행
+                if changeMove(player, moveId) then
+                    print(string.format("%dP 기술 변경 완료: %s", player, moveId))
+                else
+                    print(string.format("%dP 기술 변경 실패: %s", player, moveId))
+                end
             else
-                print("기술 변경 실패: " .. moveId)
+                print("잘못된 명령 형식: " .. command)
             end
 
             -- 명령 파일 삭제
@@ -146,17 +159,21 @@ end
 
 -- 메모리 워치 함수 (디버깅용)
 function watchMemory()
-    local moveAddr = getFirstMoveSlotAddress()
-    local currentMove = memory.read_u16_le(moveAddr, "Main RAM")
+    local moveAddr1P = getFirstMoveSlotAddress(1)
+    local moveAddr2P = getFirstMoveSlotAddress(2)
+    local currentMove1P = memory.read_u16_le(moveAddr1P, "Main RAM")
+    local currentMove2P = memory.read_u16_le(moveAddr2P, "Main RAM")
 
-    gui.text(10, 10, string.format("Move Slot Addr: 0x%08X", moveAddr))
-    gui.text(10, 30, string.format("Current Move: %d (0x%04X)", currentMove, currentMove))
+    gui.text(10, 10, string.format("1P Move Addr: 0x%08X", moveAddr1P))
+    gui.text(10, 30, string.format("1P Current Move: %d (0x%04X)", currentMove1P, currentMove1P))
+    gui.text(10, 50, string.format("2P Move Addr: 0x%08X", moveAddr2P))
+    gui.text(10, 70, string.format("2P Current Move: %d (0x%04X)", currentMove2P, currentMove2P))
 
     -- 명령 대기 상태 표시
     if fileExists(COMMAND_FILE) then
-        gui.text(10, 50, "Status: Command Pending")
+        gui.text(10, 90, "Status: Command Pending")
     else
-        gui.text(10, 50, "Status: Waiting for Command")
+        gui.text(10, 90, "Status: Waiting for Command")
     end
 end
 
