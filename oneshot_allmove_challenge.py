@@ -91,6 +91,8 @@ class PokemonChallengeGUI:
         # 도구 메뉴
         tools_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="도구", menu=tools_menu)
+        tools_menu.add_command(label="메모리 주소 자동 찾기", command=self.open_memory_scanner)
+        tools_menu.add_separator()
         tools_menu.add_command(label="모든 기술 초기화", command=self.reset_all_moves)
 
     def setup_search_panel(self):
@@ -641,6 +643,206 @@ class PokemonChallengeGUI:
 
         # 창 닫기
         self.root.destroy()
+
+    def open_memory_scanner(self):
+        """메모리 주소 자동 찾기 다이얼로그 열기"""
+        MemoryScannerDialog(self.root, self.moves_df)
+
+
+class MemoryScannerDialog:
+    """메모리 주소 자동 찾기 다이얼로그"""
+    def __init__(self, parent, moves_df):
+        self.parent = parent
+        self.moves_df = moves_df
+        self.result_file = "lua_interface/result.txt"
+        self.command_file = "lua_interface/command.txt"
+
+        # 다이얼로그 창 생성
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("메모리 주소 자동 찾기")
+        self.dialog.geometry("400x350")
+        self.dialog.resizable(False, False)
+
+        # 모달 설정
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        """UI 구성"""
+        # 설명 레이블
+        desc_frame = ttk.Frame(self.dialog, padding=10)
+        desc_frame.pack(fill=tk.X)
+
+        ttk.Label(desc_frame, text="현재 대전 중인 포켓몬의 기술을 순서대로 선택해주세요",
+                 font=("맑은 고딕", 9, "bold")).pack()
+        ttk.Label(desc_frame, text="(빈 슬롯은 '0. (빈 슬롯)'을 선택)",
+                 font=("맑은 고딕", 8), foreground="gray").pack()
+
+        # 기술 선택 프레임
+        moves_frame = ttk.Frame(self.dialog, padding=10)
+        moves_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 기술 리스트 준비 (0. 빈 슬롯 포함)
+        move_list = ["0. (빈 슬롯)"]
+        for _, row in self.moves_df.iterrows():
+            move_text = f"{row['id']}. {row['name']}"
+            move_list.append(move_text)
+
+        # 기술 1~4 콤보박스
+        self.move_vars = []
+        self.move_combos = []
+        self.move_list = move_list  # 전체 기술 리스트 저장
+
+        for i in range(4):
+            # 레이블
+            ttk.Label(moves_frame, text=f"기술 {i+1}:").grid(row=i, column=0, sticky=tk.W, pady=5)
+
+            # 콤보박스
+            var = tk.StringVar()
+            combo = ttk.Combobox(moves_frame, textvariable=var, values=move_list, width=30)
+            combo.grid(row=i, column=1, sticky=tk.EW, pady=5, padx=(5, 0))
+            combo.set("0. (빈 슬롯)")  # 기본값
+
+            # 검색 기능 바인딩
+            combo.bind('<KeyRelease>', lambda e, idx=i: self.filter_moves(idx))
+
+            self.move_vars.append(var)
+            self.move_combos.append(combo)
+
+        moves_frame.columnconfigure(1, weight=1)
+
+        # 상태 표시 프레임
+        status_frame = ttk.Frame(self.dialog, padding=10)
+        status_frame.pack(fill=tk.X)
+
+        self.status_var = tk.StringVar(value="대기 중")
+        self.status_label = ttk.Label(status_frame, textvariable=self.status_var,
+                                     font=("맑은 고딕", 9))
+        self.status_label.pack()
+
+        # 버튼 프레임
+        button_frame = ttk.Frame(self.dialog, padding=10)
+        button_frame.pack(fill=tk.X)
+
+        self.scan_button = ttk.Button(button_frame, text="주소 찾기",
+                                     command=self.start_scan, width=12)
+        self.scan_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Button(button_frame, text="취소",
+                  command=self.dialog.destroy, width=12).pack(side=tk.LEFT)
+
+    def start_scan(self):
+        """메모리 스캔 시작"""
+        # 기술 ID 추출
+        move_ids = []
+        for var in self.move_vars:
+            selected = var.get()
+            if not selected:
+                messagebox.showwarning("입력 오류", "모든 기술 슬롯을 선택해주세요\n(빈 슬롯은 '0. (빈 슬롯)' 선택)")
+                return
+
+            try:
+                move_id = int(selected.split('.')[0])
+                move_ids.append(move_id)
+            except (ValueError, IndexError):
+                messagebox.showerror("오류", f"잘못된 기술 선택: {selected}")
+                return
+
+        # 상태 업데이트
+        self.status_var.set("스캔 중... (Lua 스크립트 응답 대기)")
+        self.scan_button.config(state="disabled")
+        self.dialog.update()
+
+        # result.txt 삭제 (이전 결과 제거)
+        if os.path.exists(self.result_file):
+            try:
+                os.remove(self.result_file)
+            except:
+                pass
+
+        # SCAN 명령 전송
+        scan_command = f"SCAN:{move_ids[0]},{move_ids[1]},{move_ids[2]},{move_ids[3]}"
+        try:
+            os.makedirs("lua_interface", exist_ok=True)
+            with open(self.command_file, 'w', encoding='utf-8') as f:
+                f.write(scan_command)
+            print(f"스캔 명령 전송: {scan_command}")
+        except Exception as e:
+            messagebox.showerror("오류", f"명령 전송 실패: {e}")
+            self.scan_button.config(state="normal")
+            self.status_var.set("대기 중")
+            return
+
+        # 결과 폴링 시작
+        self.poll_result()
+
+    def poll_result(self, attempts=0, max_attempts=20):
+        """result.txt 폴링 (최대 10초, 0.5초 간격)"""
+        if attempts >= max_attempts:
+            self.status_var.set("시간 초과 - Lua 스크립트 응답 없음")
+            self.scan_button.config(state="normal")
+            messagebox.showerror("오류",
+                               "스캔 응답이 없습니다.\n\n"
+                               "Lua 스크립트가 실행 중인지 확인해주세요.")
+            return
+
+        if os.path.exists(self.result_file):
+            try:
+                with open(self.result_file, 'r', encoding='utf-8') as f:
+                    result = f.read().strip()
+
+                # 오류 확인
+                if result.startswith("ERROR:"):
+                    error_type = result.split(":")[1]
+                    if error_type == "NOT_FOUND":
+                        self.status_var.set("주소를 찾을 수 없음")
+                        messagebox.showerror("오류",
+                                           "일치하는 메모리 패턴을 찾을 수 없습니다.\n\n"
+                                           "- 대전 중인지 확인해주세요\n"
+                                           "- 선택한 기술이 정확한지 확인해주세요")
+                    else:
+                        self.status_var.set(f"오류: {error_type}")
+                        messagebox.showerror("오류", f"스캔 실패: {error_type}")
+
+                    self.scan_button.config(state="normal")
+                    return
+
+                # 성공
+                self.status_var.set(f"주소 발견: {result}")
+                messagebox.showinfo("성공",
+                                  f"메모리 주소를 찾았습니다!\n\n"
+                                  f"주소: {result}\n\n"
+                                  f"설정이 자동으로 저장되었습니다.")
+
+                print(f"메모리 주소 발견: {result}")
+                self.dialog.destroy()
+
+            except Exception as e:
+                self.status_var.set(f"오류: {e}")
+                messagebox.showerror("오류", f"결과 읽기 실패: {e}")
+                self.scan_button.config(state="normal")
+        else:
+            # 0.5초 후 재시도
+            self.dialog.after(500, lambda: self.poll_result(attempts + 1, max_attempts))
+
+    def filter_moves(self, combo_index):
+        """콤보박스 검색 필터링 (메인 UI 로직과 동일)"""
+        search_text = self.move_vars[combo_index].get().lower()
+        if not search_text:
+            self.move_combos[combo_index]['values'] = self.move_list
+            return
+
+        # 검색어로 필터링
+        filtered_moves = []
+        for move_text in self.move_list:
+            move_name_lower = move_text.lower()
+            # ID나 이름에 검색어가 포함되면 추가
+            if search_text in move_name_lower or search_text in move_text.split('.')[0]:
+                filtered_moves.append(move_text)
+
+        self.move_combos[combo_index]['values'] = filtered_moves
 
 
 def main():

@@ -33,7 +33,7 @@ copy dist\oneshot_allmove_challenge.exe release\
 copy pokemon_moves.csv release\
 copy oneshot_allmove_script.lua release\
 copy settings.ini release\
-copy README.md release\
+copy "README 읽어주세요.txt" release\
 copy saves\example_challenge.json release\saves\
 
 echo [5/5] Cleaning up build files...
